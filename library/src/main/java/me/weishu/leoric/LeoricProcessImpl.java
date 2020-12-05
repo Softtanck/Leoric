@@ -54,11 +54,15 @@ public class LeoricProcessImpl implements ILeoricProcess {
 
     @Override
     public void onPersistentCreate(final Context context, LeoricConfigs configs) {
-
+        // 调用该方法获取AMS的binder代理对象,实际上通过反射拿到的
         initAmsBinder();
+        // 根据不同的Android版本构建不同的Parcel的binder数据,因为正常启动调用startService来不及在5ms中创建一个新的进程
+        // 其实很危险的,不一定能完美的绕过5ms.只要能保证进程创建速度够快是可以的.
         initServiceParcel(context, configs.DAEMON_ASSISTANT_CONFIG.serviceName);
+        // 开始启动远程服务通过之前Hook到的Binder对象.直接将Parcel发给AMS
         startServiceByAmsBinder();
 
+        // 创建四个flock的文件,用于进程退出监听
         Thread t = new Thread() {
             public void run() {
                 File indicatorDir = context.getDir(INDICATOR_DIR_NAME, Context.MODE_PRIVATE);
@@ -126,7 +130,8 @@ public class LeoricProcessImpl implements ILeoricProcess {
 
     @SuppressLint("Recycle")
 // when processName dead, we should save time to restart and kill self, don`t take a waste of time to recycle
-    private void initServiceParcel(Context context, String serviceName) {
+    private void initServiceParcel(Context context, String serviceName) { //只要该函数到AMS并且AMS通过socket到zygote去Fork的进程在5ms,就能保证进程杀不死.
+        // 当然在Java层速度是非常慢,更好的选择是在native直接操作ioctl到Binder的驱动层完成通知ASM启动服务
         Intent intent = new Intent();
         ComponentName component = new ComponentName(context.getPackageName(), serviceName);
         intent.setComponent(component);
@@ -182,6 +187,8 @@ public class LeoricProcessImpl implements ILeoricProcess {
             }
             //mRemote.transact(34, mServiceData, null, 0);//START_SERVICE_TRANSACTION = 34
 //            mRemote.transact(26, mServiceData, null, 1);//START_SERVICE_TRANSACTION = 34
+            // 等下我去看一下源码,看看是否startService不是oneway的,如果本身不是oneway的调用,是不是意味着速度更慢?
+            // 所以我们需要修改成oneway的方式直接启动?
             mRemote.transact(code, mServiceData, null, 1);//START_SERVICE_TRANSACTION = 34
             return true;
         } catch (RemoteException e) {

@@ -195,11 +195,12 @@ Java_me_weishu_leoric_NativeLeoric_doDaemon(JNIEnv *env, jobject jobj,
         if ((pid = fork()) < 0) {
             printf("fork 2 error\n");
             exit(-1);
-        } else if (pid > 0) {
+        } else if (pid > 0) { // 这儿实际上是父进程,因为PID > 0,所以在父进程直接系统调用exit退出了,让该进程由init进程托管了.
             // 托孤
             exit(0);
         }
 
+        // 下面代码执行在第二个Fork的子进程中
         LOGD("mypid: %d", getpid());
         const int MAX_PATH = 256;
         char indicator_self_path_child[MAX_PATH];
